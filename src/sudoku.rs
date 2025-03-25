@@ -1,15 +1,15 @@
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-pub const SIZE: usize = 9;
-pub const BOX_SIZE: usize = 3;
+pub const SIZE: usize = 9; // Ensure these are pub
+pub const BOX_SIZE: usize = 3; // Ensure these are pub
 
 #[derive(Clone, Debug)]
 pub struct SudokuGrid {
     /// The complete solved grid
     solution: [[u8; SIZE]; SIZE],
-    /// The grid presented to the user, with some numbers hidden (0)
-    puzzle: [[u8; SIZE]; SIZE],
+    // /// The grid presented to the user, with some numbers hidden (0) - REMOVED
+    // puzzle: [[u8; SIZE]; SIZE],
     /// The user's current progress, initially a copy of puzzle
     current: [[u8; SIZE]; SIZE],
     /// Mask indicating which cells are fixed (part of the initial puzzle)
@@ -24,9 +24,9 @@ impl SudokuGrid {
         generator.fill(); // Fill the grid completely
 
         let solution = grid; // Keep the full solution
-        let mut puzzle = solution;
-        let mut current = solution;
-        let mut fixed = [[true; SIZE]; SIZE];
+        // let mut puzzle = solution; // REMOVED
+        let mut current = solution; // Start current state from solution
+        let mut fixed = [[true; SIZE]; SIZE]; // Assume all fixed initially
 
         // Remove numbers to create the puzzle
         let mut cells: Vec<(usize, usize)> =
@@ -35,7 +35,6 @@ impl SudokuGrid {
 
         // Difficulty roughly corresponds to numbers *kept* (lower means harder)
         // Simple difficulty scaling: remove up to a certain number.
-        // A proper difficulty requires checking uniqueness and solution complexity.
         let numbers_to_remove = (SIZE * SIZE).saturating_sub(difficulty as usize).min(65); // Cap removal
         let mut removed_count = 0;
 
@@ -43,16 +42,13 @@ impl SudokuGrid {
             if removed_count >= numbers_to_remove {
                 break;
             }
-            // Simple removal - does NOT guarantee unique solution for harder puzzles
-            puzzle[r][c] = 0;
-            current[r][c] = 0;
-            fixed[r][c] = false;
+            current[r][c] = 0; // Clear the cell in the user's grid
+            fixed[r][c] = false; // Mark the cell as not fixed
             removed_count += 1;
         }
 
         SudokuGrid {
             solution,
-            puzzle,
             current,
             fixed,
         }
@@ -75,8 +71,9 @@ impl SudokuGrid {
     /// Returns true if the number was set, false otherwise (e.g., fixed cell).
     pub fn set_number(&mut self, r: usize, c: usize, num: u8) -> bool {
         if r < SIZE && c < SIZE && !self.fixed[r][c] {
-            // Allow setting 0 to clear
-            if num >= 0 && num <= 9 {
+            // Allow setting 0 to clear. num >= 0 is always true for u8.
+            if num <= 9 {
+                // REMOVED: num >= 0 &&
                 self.current[r][c] = num;
                 return true;
             }
@@ -93,7 +90,7 @@ impl SudokuGrid {
     pub fn is_valid_move(&self, r: usize, c: usize, num: u8) -> bool {
         if num == 0 {
             return true;
-        } // Clearing is always valid
+        } // Clearing is always valid placement-wise
 
         // Check row
         for col in 0..SIZE {
@@ -129,14 +126,10 @@ impl SudokuGrid {
     pub fn is_solved(&self) -> bool {
         self.current == self.solution
     }
-
-    pub fn solution_at(&self, r: usize, c: usize) -> u8 {
-        self.solution[r][c]
-    }
 }
 
 // --- Backtracking Generator ---
-
+// (Generator struct and impl unchanged)
 struct Generator<'a> {
     grid: &'a mut [[u8; SIZE]; SIZE],
     nums: [u8; SIZE],
