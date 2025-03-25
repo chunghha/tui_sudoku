@@ -17,7 +17,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             Constraint::Min(0),    // Grid Area placeholder
             Constraint::Length(3), // Instructions / Status
         ])
-        .split(frame.size());
+        .split(frame.area());
 
     // Title
     let title = Paragraph::new("Sudoku TUI (q: Quit, s: Toggle Solution, Arrows: Move, 1-9: Enter, 0/Del/Backspace: Clear)")

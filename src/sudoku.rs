@@ -1,5 +1,5 @@
+use rand::rng;
 use rand::seq::SliceRandom;
-use rand::thread_rng;
 
 pub const SIZE: usize = 9; // Ensure these are pub
 pub const BOX_SIZE: usize = 3; // Ensure these are pub
@@ -31,7 +31,7 @@ impl SudokuGrid {
         // Remove numbers to create the puzzle
         let mut cells: Vec<(usize, usize)> =
             (0..SIZE * SIZE).map(|i| (i / SIZE, i % SIZE)).collect();
-        cells.shuffle(&mut thread_rng());
+        cells.shuffle(&mut rng());
 
         // Difficulty roughly corresponds to numbers *kept* (lower means harder)
         // Simple difficulty scaling: remove up to a certain number.
@@ -138,7 +138,7 @@ struct Generator<'a> {
 impl<'a> Generator<'a> {
     fn new(grid: &'a mut [[u8; SIZE]; SIZE]) -> Self {
         let mut nums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-        nums.shuffle(&mut thread_rng());
+        nums.shuffle(&mut rng());
         Generator { grid, nums }
     }
 
@@ -183,7 +183,7 @@ impl<'a> Generator<'a> {
         if let Some((r, c)) = self.find_empty() {
             // Use shuffled numbers for randomness
             let mut local_nums = self.nums;
-            local_nums.shuffle(&mut thread_rng());
+            local_nums.shuffle(&mut rng());
 
             for &num in &local_nums {
                 if self.is_safe(r, c, num) {
