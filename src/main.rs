@@ -46,6 +46,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<()> {
     loop {
+        // Update timer before drawing
+        app.update_timer();
+
         // Draw UI
         terminal.draw(|f| ui::draw(f, app))?;
 
@@ -54,8 +57,11 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
             if let Event::Key(key) = event::read()? {
                 // Ensure we only react on key press, not release
                 if key.kind == KeyEventKind::Press {
-                    // Don't allow input if solved, except 'q'
-                    if app.state == AppState::Solved && key.code != KeyCode::Char('q') {
+                    // Don't allow input if solved, except 'q' or 'n'
+                    if app.state == AppState::Solved
+                        && key.code != KeyCode::Char('q')
+                        && key.code != KeyCode::Char('n')
+                    {
                         continue;
                     }
 
@@ -77,6 +83,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                         }
                         // Toggle Solution
                         KeyCode::Char('s') => app.toggle_solution(),
+                        // New puzzle (Shuffle)
+                        KeyCode::Char('n') => app.new_puzzle(),
                         _ => {} // Ignore other keys
                     }
                 }

@@ -1,4 +1,4 @@
-use crate::app::App;
+use crate::app::{App, AppState};
 use crate::sudoku::SIZE; // Assuming SIZE is pub const in sudoku.rs
 use ratatui::{
     prelude::*,
@@ -13,20 +13,46 @@ pub fn draw(frame: &mut Frame, app: &App) {
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // Title
+            Constraint::Length(2), // Title - Changed from 1 to 2
+            Constraint::Length(1), // Timer
             Constraint::Min(0),    // Grid Area placeholder
             Constraint::Length(3), // Instructions / Status
         ])
         .split(frame.area());
 
-    // Title
-    let title = Paragraph::new("Sudoku TUI (q: Quit, s: Toggle Solution, Arrows: Move, 1-9: Enter, 0/Del/Backspace: Clear)")
-        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
-        .alignment(Alignment::Center);
+    // Title / Help Text (split into two lines)
+    let help_line1 = Line::from(vec![Span::styled(
+        "Controls: q: Quit, n: New Puzzle, s: Toggle Solution",
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    )]);
+    let help_line2 = Line::from(vec![Span::styled(
+        "          Arrows/hjkl: Move, 1-9: Enter, 0/Del/Backspace: Clear",
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    )]);
+
+    let title_text = Text::from(vec![help_line1, help_line2]);
+
+    let title = Paragraph::new(title_text).alignment(Alignment::Center);
     frame.render_widget(title, main_layout[0]);
 
+    // Timer
+    let elapsed_secs = app.elapsed_time.as_secs();
+    let timer_str = format!("{:02}:{:02}", elapsed_secs / 60, elapsed_secs % 60);
+    let timer_paragraph = Paragraph::new(timer_str)
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+        .alignment(Alignment::Center);
+    frame.render_widget(timer_paragraph, main_layout[1]);
+
     // Grid Area - Calculate Centered Rectangle
-    let grid_area = main_layout[1];
+    let grid_area = main_layout[2];
     let centered_grid_rect = calculate_centered_rect(grid_area, GRID_WIDTH, GRID_HEIGHT);
 
     let grid_text = build_grid_text(app);
@@ -38,32 +64,51 @@ pub fn draw(frame: &mut Frame, app: &App) {
     frame.render_widget(grid_paragraph, centered_grid_rect);
 
     // Status / Win Message
-    let status_text = if app.state == crate::app::AppState::Solved {
-        Span::styled(
-            "Congratulations! You solved it! (q to quit)",
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )
+    let status_area = main_layout[3];
+    let status_text = if app.state == AppState::Solved {
+        let final_time_str = format!("{:02}:{:02}", elapsed_secs / 60, elapsed_secs % 60);
+        Line::from(vec![
+            Span::styled(
+                "Congratulations! You solved it in ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                final_time_str,
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD | Modifier::ITALIC),
+            ),
+            Span::styled(
+                "! (q: Quit, n: New)",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ])
     } else if !app.last_input_valid
         // Only show input error if the cell wasn't fixed or we aren't showing the solution
         && !app.sudoku.is_fixed(app.cursor_pos.0, app.cursor_pos.1)
         && !app.show_solution
     {
-        Span::styled(
+        Line::from(Span::styled(
             "Invalid move!",
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        )
+        ))
     } else if app.show_solution {
-        Span::styled("Showing Solution", Style::default().fg(Color::Cyan))
+        Line::from(Span::styled(
+            "Showing Solution",
+            Style::default().fg(Color::Cyan),
+        ))
     } else {
-        Span::raw("") // Default empty status
+        Line::from(Span::raw("")) // Default empty status
     };
 
     let status_paragraph = Paragraph::new(status_text)
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
-    frame.render_widget(status_paragraph, main_layout[2]);
+    frame.render_widget(status_paragraph, status_area);
 }
 
 /// Helper function to calculate a centered Rect

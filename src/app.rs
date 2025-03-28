@@ -1,6 +1,7 @@
 use crate::sudoku::{SIZE, SudokuGrid};
+use std::time::{Duration, Instant};
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum AppState {
     Running,
     Solved,
@@ -12,17 +13,43 @@ pub struct App {
     pub show_solution: bool,
     pub state: AppState,
     pub last_input_valid: bool,
+    difficulty: u32, // Store the difficulty
+    start_time: Instant,
+    pub elapsed_time: Duration, // Made pub for UI access
 }
 
 impl App {
     pub fn new(difficulty: u32) -> Self {
+        let start_time = Instant::now();
         App {
             sudoku: SudokuGrid::new(difficulty),
             cursor_pos: (0, 0),
             show_solution: false,
             state: AppState::Running,
             last_input_valid: true, // Assume valid start
+            difficulty,             // Initialize difficulty
+            start_time,
+            elapsed_time: Duration::ZERO,
         }
+    }
+
+    /// Updates the elapsed time if the game is running.
+    pub fn update_timer(&mut self) {
+        if self.state == AppState::Running {
+            self.elapsed_time = self.start_time.elapsed();
+        }
+        // If solved, elapsed_time stops updating
+    }
+
+    /// Generates a new puzzle using the stored difficulty and resets state.
+    pub fn new_puzzle(&mut self) {
+        self.sudoku = SudokuGrid::new(self.difficulty);
+        self.cursor_pos = (0, 0);
+        self.show_solution = false;
+        self.state = AppState::Running;
+        self.last_input_valid = true;
+        self.start_time = Instant::now(); // Reset timer
+        self.elapsed_time = Duration::ZERO;
     }
 
     pub fn move_cursor(&mut self, dr: isize, dc: isize) {
@@ -57,6 +84,11 @@ impl App {
 
     pub fn set_current_cell(&mut self, num: u8) {
         let (r, c) = self.cursor_pos;
+        // Prevent changes if the game is already solved
+        if self.state == AppState::Solved {
+            self.last_input_valid = false;
+            return;
+        }
         if !self.sudoku.is_fixed(r, c) {
             if num >= 1 && num <= 9 {
                 // Check validity before setting the number
@@ -66,6 +98,7 @@ impl App {
                 if self.sudoku.is_solved() {
                     // is_solved implicitly checks if all cells are valid and filled
                     self.state = AppState::Solved;
+                    // Timer automatically stops updating because of the state check in update_timer
                 }
             } else {
                 // If input is not 1-9 (e.g., trying to set 0 explicitly here), treat as invalid input action
@@ -78,35 +111,24 @@ impl App {
 
     pub fn clear_current_cell(&mut self) {
         let (r, c) = self.cursor_pos;
+        // Prevent changes if the game is already solved
+        if self.state == AppState::Solved {
+            self.last_input_valid = false;
+            return;
+        }
         if self.sudoku.clear_number(r, c) {
-            // clear_number uses set_number(..., 0)
-            self.last_input_valid = true; // Clearing is always considered a valid action if the cell isn't fixed
-        // Check if clearing solved the puzzle (unlikely, but technically possible if the solution had 0?)
-        // No, standard Sudoku solutions don't have 0. So clearing never solves it.
-        // Reset state if it was somehow Solved? No, let's keep Solved state sticky until quit.
+            self.last_input_valid = true;
         } else {
-            // Failed to clear, must be a fixed cell
             self.last_input_valid = false;
         }
     }
 
     pub fn toggle_solution(&mut self) {
         self.show_solution = !self.show_solution;
-        // If hiding solution, reset last_input_valid as it doesn't apply to the solution view
         if !self.show_solution {
             self.last_input_valid = true;
         } else {
-            // If showing solution, validity doesn't matter for user input status
             self.last_input_valid = true;
         }
     }
-
-    // pub fn check_current_cell_validity(&self) -> bool { // REMOVED
-    //      let (r, c) = self.cursor_pos;
-    //      if let Some(num) = self.sudoku.get_cell(r, c, false) { // Check against current user grid
-    //          self.sudoku.is_valid_move(r, c, num)
-    //      } else {
-    //          true // Empty cell is considered valid
-    //      }
-    // }
 }

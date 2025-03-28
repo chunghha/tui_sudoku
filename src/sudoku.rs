@@ -8,8 +8,6 @@ pub const BOX_SIZE: usize = 3; // Ensure these are pub
 pub struct SudokuGrid {
     /// The complete solved grid
     solution: [[u8; SIZE]; SIZE],
-    // /// The grid presented to the user, with some numbers hidden (0) - REMOVED
-    // puzzle: [[u8; SIZE]; SIZE],
     /// The user's current progress, initially a copy of puzzle
     current: [[u8; SIZE]; SIZE],
     /// Mask indicating which cells are fixed (part of the initial puzzle)
