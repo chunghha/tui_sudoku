@@ -9,7 +9,7 @@ use ratatui::{
 const GRID_WIDTH: u16 = 37; // 9 cells * 3 chars + 8 separators * 1 char + 2 border chars
 const GRID_HEIGHT: u16 = 19; // 9 number rows + 8 separator rows + 2 border chars
 
-pub fn draw(frame: &mut Frame, app: &App) {
+pub fn draw(frame: &mut Frame, app: &mut App) {
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -54,6 +54,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     // Grid Area - Calculate Centered Rectangle
     let grid_area = main_layout[2];
     let centered_grid_rect = calculate_centered_rect(grid_area, GRID_WIDTH, GRID_HEIGHT);
+    app.set_grid_rect(centered_grid_rect);
 
     let grid_text = build_grid_text(app);
     let grid_paragraph = Paragraph::new(grid_text)

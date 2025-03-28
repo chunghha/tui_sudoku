@@ -1,4 +1,5 @@
 use crate::sudoku::{SIZE, SudokuGrid};
+use ratatui::layout::Rect; // Import Rect
 use std::time::{Duration, Instant};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -15,7 +16,8 @@ pub struct App {
     pub last_input_valid: bool,
     difficulty: u32, // Store the difficulty
     start_time: Instant,
-    pub elapsed_time: Duration, // Made pub for UI access
+    pub elapsed_time: Duration,     // Made pub for UI access
+    grid_screen_rect: Option<Rect>, // Store grid position on screen
 }
 
 impl App {
@@ -30,6 +32,42 @@ impl App {
             difficulty,             // Initialize difficulty
             start_time,
             elapsed_time: Duration::ZERO,
+            grid_screen_rect: None, // Initialize as None
+        }
+    }
+
+    /// Stores the calculated screen area of the grid.
+    pub fn set_grid_rect(&mut self, rect: Rect) {
+        self.grid_screen_rect = Some(rect);
+    }
+
+    /// Attempts to move the cursor based on screen coordinates.
+    pub fn handle_mouse_click(&mut self, screen_col: u16, screen_row: u16) {
+        if let Some(grid_rect) = self.grid_screen_rect {
+            // Calculate coordinates relative to the top-left corner of the grid *content* area
+            // (inside the block borders)
+            if screen_col > grid_rect.x
+                && screen_col < grid_rect.right() - 1
+                && screen_row > grid_rect.y
+                && screen_row < grid_rect.bottom() - 1
+            {
+                let relative_col = screen_col - (grid_rect.x + 1);
+                let relative_row = screen_row - (grid_rect.y + 1);
+
+                // Convert relative screen coords to grid cell coords
+                // Cell width = 3, separator width = 1 => 4 chars per cell horizontally
+                // Cell height = 1, separator height = 1 => 2 chars per cell vertically
+                let grid_c = (relative_col / 4) as usize;
+                let grid_r = (relative_row / 2) as usize;
+
+                // Check if click was on a cell number, not a separator
+                let clicked_on_cell_col = relative_col % 4 != 3;
+                let clicked_on_cell_row = relative_row % 2 == 0;
+
+                if clicked_on_cell_col && clicked_on_cell_row && grid_r < SIZE && grid_c < SIZE {
+                    self.cursor_pos = (grid_r, grid_c);
+                }
+            }
         }
     }
 
