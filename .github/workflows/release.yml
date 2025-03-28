@@ -1,0 +1,109 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # Trigger on version tags like v1.0.0
+
+jobs:
+  build-release:
+    name: Build for ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+
+      # Cache Cargo registry/index/build files for faster builds
+      - name: Cache Cargo Dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build binary
+        run: cargo build --verbose --release --target ${{ matrix.target }}
+
+      - name: Prepare Artifact Name and Path
+        id: prep
+        shell: bash
+        run: |
+          # Ensure this matches the actual executable name (check Cargo.toml if needed)
+          BINARY_NAME="tui_sudoku"
+          VERSION="${{ github.ref_name }}" # e.g., v1.0.1
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            EXE_PATH="target/${{ matrix.target }}/release/${BINARY_NAME}.exe"
+            ARCHIVE_FILENAME="${BINARY_NAME}-${VERSION}-${{ matrix.target }}.zip"
+            echo "ASSET_PATH=${EXE_PATH}" >> $GITHUB_OUTPUT
+            echo "ASSET_NAME=${ARCHIVE_FILENAME}" >> $GITHUB_OUTPUT
+            echo "IS_WINDOWS=true" >> $GITHUB_OUTPUT
+          else
+            EXE_PATH="target/${{ matrix.target }}/release/${BINARY_NAME}"
+            ARCHIVE_FILENAME="${BINARY_NAME}-${VERSION}-${{ matrix.target }}.tar.gz"
+            echo "ASSET_PATH=${EXE_PATH}" >> $GITHUB_OUTPUT
+            echo "ASSET_NAME=${ARCHIVE_FILENAME}" >> $GITHUB_OUTPUT
+            echo "IS_WINDOWS=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Package Binary (Linux/macOS)
+        if: steps.prep.outputs.IS_WINDOWS == 'false'
+        shell: bash
+        # Create a tar.gz archive containing just the executable
+        run: |
+          tar czf "${{ steps.prep.outputs.ASSET_NAME }}" -C "$(dirname "${{ steps.prep.outputs.ASSET_PATH }}")" "$(basename "${{ steps.prep.outputs.ASSET_PATH }}")"
+
+      - name: Package Binary (Windows)
+        if: steps.prep.outputs.IS_WINDOWS == 'true'
+        shell: pwsh # Use powershell for built-in zip functionality
+        # Create a zip archive containing just the executable
+        run: |
+          Compress-Archive -Path "${{ steps.prep.outputs.ASSET_PATH }}" -DestinationPath "${{ steps.prep.outputs.ASSET_NAME }}" -Force
+
+      # Upload the packaged binary artifact for the release job
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.prep.outputs.ASSET_NAME }} # Use archive name for artifact
+          path: ${{ steps.prep.outputs.ASSET_NAME }}
+
+  create-release:
+    name: Create GitHub Release
+    needs: build-release # Run after all builds are complete
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Allow action to create release and upload assets
+    steps:
+      # Download all artifacts (the zip/tar.gz files) from the build jobs
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts # Download all artifacts into an 'artifacts' directory
+
+      # Optional: List downloaded files for debugging
+      - name: List downloaded artifacts
+        run: find artifacts -type f
+
+      # Create the GitHub Release and upload the downloaded artifacts
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          generate_release_notes: true # Automatically generate release notes based on commits since last tag
+          files: |
+            artifacts/**/*.zip
+            artifacts/**/*.tar.gz
+        env:
+          # This token is provided by GitHub Actions automatically
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
