@@ -1,8 +1,26 @@
-use rand::rng;
 use rand::seq::SliceRandom;
 
 pub const SIZE: usize = 9; // Ensure these are pub
 pub const BOX_SIZE: usize = 3; // Ensure these are pub
+
+/// Represents the game difficulty level.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Difficulty {
+    Easy,
+    Medium,
+    Hard,
+}
+
+impl Difficulty {
+    /// Returns the approximate number of cells to *keep* for this difficulty.
+    fn cells_to_keep(&self) -> usize {
+        match self {
+            Difficulty::Easy => 45,   // More clues
+            Difficulty::Medium => 35, // Default
+            Difficulty::Hard => 25,   // Fewer clues
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct SudokuGrid {
@@ -15,34 +33,33 @@ pub struct SudokuGrid {
 }
 
 impl SudokuGrid {
-    /// Generates a new Sudoku puzzle.
-    pub fn new(difficulty: u32) -> Self {
+    /// Generates a new Sudoku puzzle for the given difficulty.
+    pub fn new(difficulty: Difficulty) -> Self {
         let mut grid = [[0u8; SIZE]; SIZE];
         let mut generator = Generator::new(&mut grid);
         generator.fill(); // Fill the grid completely
 
         let solution = grid; // Keep the full solution
-        // let mut puzzle = solution; // REMOVED
         let mut current = solution; // Start current state from solution
         let mut fixed = [[true; SIZE]; SIZE]; // Assume all fixed initially
 
-        // Remove numbers to create the puzzle
         let mut cells: Vec<(usize, usize)> =
             (0..SIZE * SIZE).map(|i| (i / SIZE, i % SIZE)).collect();
-        cells.shuffle(&mut rng());
 
-        // Difficulty roughly corresponds to numbers *kept* (lower means harder)
-        // Simple difficulty scaling: remove up to a certain number.
-        let numbers_to_remove = (SIZE * SIZE).saturating_sub(difficulty as usize).min(65); // Cap removal
-        let mut removed_count = 0;
+        // Get a thread-local RNG instance
+        let mut rng = rand::rng();
+        cells.shuffle(&mut rng);
 
-        for &(r, c) in &cells {
-            if removed_count >= numbers_to_remove {
+        let numbers_to_keep = difficulty.cells_to_keep();
+        let numbers_to_remove = (SIZE * SIZE).saturating_sub(numbers_to_keep).min(70); // Allow removing more for harder levels, cap reasonably
+
+        // Use enumerate instead of a manual counter
+        for (count, &(r, c)) in cells.iter().enumerate() {
+            if count >= numbers_to_remove {
                 break;
             }
             current[r][c] = 0; // Clear the cell in the user's grid
             fixed[r][c] = false; // Mark the cell as not fixed
-            removed_count += 1;
         }
 
         SudokuGrid {
@@ -71,7 +88,6 @@ impl SudokuGrid {
         if r < SIZE && c < SIZE && !self.fixed[r][c] {
             // Allow setting 0 to clear. num >= 0 is always true for u8.
             if num <= 9 {
-                // REMOVED: num >= 0 &&
                 self.current[r][c] = num;
                 return true;
             }
@@ -136,7 +152,9 @@ struct Generator<'a> {
 impl<'a> Generator<'a> {
     fn new(grid: &'a mut [[u8; SIZE]; SIZE]) -> Self {
         let mut nums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-        nums.shuffle(&mut rng());
+        // Get a thread-local RNG instance
+        let mut rng = rand::rng();
+        nums.shuffle(&mut rng);
         Generator { grid, nums }
     }
 
@@ -179,9 +197,10 @@ impl<'a> Generator<'a> {
 
     fn fill(&mut self) -> bool {
         if let Some((r, c)) = self.find_empty() {
-            // Use shuffled numbers for randomness
             let mut local_nums = self.nums;
-            local_nums.shuffle(&mut rng());
+            // Get a thread-local RNG instance for this scope if needed, or reuse one passed in
+            let mut rng = rand::rng();
+            local_nums.shuffle(&mut rng);
 
             for &num in &local_nums {
                 if self.is_safe(r, c, num) {

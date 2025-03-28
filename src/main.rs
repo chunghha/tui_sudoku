@@ -24,9 +24,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // ---- App Creation ----
-    // Adjust difficulty (approx numbers remaining). Lower is harder. e.g., 35 is medium.
-    let difficulty = 35;
-    let mut app = App::new(difficulty);
+    let mut app = App::new();
 
     // ---- Main Loop ----
     let res = run_app(&mut terminal, &mut app);
@@ -49,65 +47,71 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<()> {
     loop {
-        // Update timer before drawing
         app.update_timer();
-
-        // Draw UI
         terminal.draw(|f| ui::draw(f, app))?;
 
-        // Handle Input (Polling)
         if event::poll(std::time::Duration::from_millis(100))? {
             match event::read()? {
-                Event::Key(key) => {
-                    if key.kind == KeyEventKind::Press {
-                        // Ensure we only react on key press, not release
-                        if app.state == AppState::Solved
-                            && key.code != KeyCode::Char('q')
-                            && key.code != KeyCode::Char('n')
-                        {
-                            continue;
-                        }
-
-                        match key.code {
-                            // Quit
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                    // State-dependent key handling
+                    match app.state {
+                        AppState::SelectingDifficulty => match key.code {
                             KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-                            // Navigation
-                            KeyCode::Up | KeyCode::Char('k') => app.move_cursor(-1, 0),
-                            KeyCode::Down | KeyCode::Char('j') => app.move_cursor(1, 0),
-                            KeyCode::Left | KeyCode::Char('h') => app.move_cursor(0, -1),
-                            KeyCode::Right | KeyCode::Char('l') => app.move_cursor(0, 1),
-                            // Number Input
-                            KeyCode::Char(c @ '1'..='9') => {
-                                app.set_current_cell(c.to_digit(10).unwrap() as u8);
+                            KeyCode::Up | KeyCode::Char('k') => app.move_difficulty_selection(-1),
+                            KeyCode::Down | KeyCode::Char('j') => app.move_difficulty_selection(1),
+                            KeyCode::Enter => app.start_game(),
+                            _ => {}
+                        },
+                        AppState::Running | AppState::Solved => {
+                            // Don't allow input if solved, except 'q' or 'n' or 's'
+                            if app.state == AppState::Solved
+                                && ![
+                                    KeyCode::Char('q'),
+                                    KeyCode::Char('n'),
+                                    KeyCode::Char('s'),
+                                    KeyCode::Esc,
+                                ]
+                                .contains(&key.code)
+                            // Added 's' and Esc check
+                            {
+                                continue;
                             }
-                            // Clear Cell
-                            KeyCode::Char('0') | KeyCode::Backspace | KeyCode::Delete => {
-                                app.clear_current_cell();
+                            match key.code {
+                                KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+                                KeyCode::Up | KeyCode::Char('k') => app.move_cursor(-1, 0),
+                                KeyCode::Down | KeyCode::Char('j') => app.move_cursor(1, 0),
+                                KeyCode::Left | KeyCode::Char('h') => app.move_cursor(0, -1),
+                                KeyCode::Right | KeyCode::Char('l') => app.move_cursor(0, 1),
+                                KeyCode::Char(c @ '1'..='9') => {
+                                    // Only allow setting number if Running
+                                    if app.state == AppState::Running {
+                                        app.set_current_cell(c.to_digit(10).unwrap() as u8);
+                                    }
+                                }
+                                KeyCode::Char('0') | KeyCode::Backspace | KeyCode::Delete => {
+                                    // Only allow clearing number if Running
+                                    if app.state == AppState::Running {
+                                        app.clear_current_cell();
+                                    }
+                                }
+                                KeyCode::Char('s') => app.toggle_solution(), // Allowed in Running or Solved
+                                KeyCode::Char('n') => app.return_to_difficulty_selection(), // Return to menu
+                                _ => {}
                             }
-                            // Toggle Solution
-                            KeyCode::Char('s') => app.toggle_solution(),
-                            // New puzzle (Shuffle)
-                            KeyCode::Char('n') => app.new_puzzle(),
-                            _ => {} // Ignore other keys
                         }
                     }
                 }
                 Event::Mouse(mouse_event) => {
-                    // We only care about mouse down (click) events for setting cursor
-                    if mouse_event.kind == MouseEventKind::Down(MouseButton::Left) {
-                        // Don't allow interaction if solved
-                        if app.state != AppState::Solved {
-                            app.handle_mouse_click(mouse_event.column, mouse_event.row);
-                        }
+                    // Handle mouse clicks only when Running
+                    if app.state == AppState::Running
+                        && mouse_event.kind == MouseEventKind::Down(MouseButton::Left)
+                    {
+                        app.handle_mouse_click(mouse_event.column, mouse_event.row);
                     }
-                    // Ignore other mouse events like Up, Drag, Scroll, etc.
                 }
-                Event::Resize(_, _) => {
-                    // Re-rendering automatically handles resize
-                }
-                _ => {} // Ignore other event types
+                Event::Resize(_, _) => {} // Re-rendering handled automatically
+                _ => {}                   // Ignore other events
             }
         }
-        // No need for explicit update call, state is modified directly by handlers
     }
 }
